@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+    <head>
+		<meta charset="utf-8">
+
+		<title>C++ Rvalue References and Move Semantics</title>
+
+        <link rel="stylesheet" href="css/reveal.css">
+        <link rel="stylesheet" href="css/theme/league.css">
+		<!--<link rel="stylesheet" href="css/theme/black.css">-->
+        <!-- Code syntax highlighting -->
+        <link rel="stylesheet" href="lib/css/zenburn.css">
+	</head>
+
+    <body>
+        <div class="reveal">
+            <div class="slides">
+                <section>
+                    <h1>C++ Rvalue References and Move Semantics</h1>
+                    <p><small>Florian Behrens, 31.03.2016</small><p>
+                </section>
+				
+                <section>
+                    <h2>Once upon a time...</h2>
+                    <p>In C++03 and before, temporaries (aka "rvalues", as they often lie on the right side of an assignment) were intended to never be modifiable and were considered to be indistinguishable from <code>const T&amp;</code> types.</p>
+<pre><code class="lang-cpp">void foo() {
+    std::string s;
+    s = std::string("Hello world!");
+}</code></pre>
+                </section>
+                <section>
+                    <h2>A chronic Performance Problem...</h2>
+                    <p>...in C++03 is the costly and unneeded deep copies that can happen implicitly when objects are passed by value:</p>
+<pre><code class="lang-cpp">std::string foo() {
+    return std::string();
+}</code></pre>                       
+                </section>
+
+                <section>
+                    <h2>Ok, it might be objected that there is <a href="https://en.wikipedia.org/wiki/Return_value_optimization">Return Value Optimization</a></h2>
+                    <p>But what if:</p>
+<pre><code class="lang-cpp">std::vector&lt;int&gt; make_vector(bool big) {
+    std::vector&lt;int&gt; small_vec;
+    std::vector&lt;int&gt; big_vec(1000000);
+    
+    if (big)
+        return big_vec;
+    
+    return small_vec;
+}</code></pre>                       
+                </section>
+
+                <section>
+                    <h2>Likewise, what if you wanted to store a <a href="http://www.boost.org/doc/libs/1_60_0/libs/core/doc/html/core/noncopyable.html">non-copyable</a> resource in a container?</h2>
+<pre><code class="lang-cpp">struct file : boost::noncopyable {
+    file(std::string name) {
+        fd_ = fopen(name.c_str(), "r");
+    }
+
+    ~file() {
+        if (fd_) fclose(fd_);
+    }
+
+    ...
+
+private:
+    int fd_;
+};
+
+std::vector&lt;file&gt; files_vec;  // Does not work!
+</code></pre>
+                </section>
+
+                <section>
+                    <h2>Solution: Move Semantics!</h2>
+                    <p>A <em>move</em> is semantically different to a <em>copy</em> in that it leaves behind the rhs object of a move operation in undefined state.</p>
+<pre><code class="lang-cpp">// Move assignment in C++11
+lhs = std::move(rhs);
+
+// lhs contains state of rhs, rhs is in undefined state now!
+</code></pre>                       
+                </section>
+
+                <section>
+                    <h2>How to define move operators?</h2>
+<pre><code class="lang-cpp">struct foo {
+    ...
+    
+    // Copy constructor
+    foo(const foo& obj);
+    
+    // Move constructor
+    foo(foo&& obj);
+    
+    // Assignment operator
+    foo& operator=(const foo& rhs);
+    
+    // Move assignment operator
+    foo& operator=(foo&& rhs);
+    
+    ...
+};</code></pre>
+                </section>
+
+                <section>
+                    <h2>Move operators for the <code>file</code> class</h2>
+<pre><code class="lang-cpp">struct file {
+    ...
+
+    // Move constructor
+    file(file&& obj) : fd_(obj.fd_) {
+        obj.fd_ = -1;
+    }
+
+    // Move assignment operator
+    file& operator=(file&& rhs) {
+        fd_ = rhs.fd_;
+        rhs.fd_ = -1;
+        return *this;
+    }
+
+    // Destructor
+    ...
+};</code></pre>
+                </section>
+
+                <section>
+                    <h2>What the heck is this fancy <code>T&&</code>?</h2>
+					<p class="fragment">An <a href="en.cppreference.com/w/cpp/language/reference">rvalue reference</a>!</p>
+                </section>
+
+                <section>
+                    <h2>What the heck is an <a href="en.cppreference.com/w/cpp/language/reference">rvalue reference</a>?</h2>
+					<p class="fragment">Well, let's recall some basic C++ language properties...</p>
+				</section>
+					
+                <section>
+                    <h2>Types and value categories</h2>
+					<p>Each C++ expression is characterized by two independent properties: a <em>type</em> and a <em>value category</em>.</p>
+					<p>Each expression has some non-reference type, and belongs to exactly one of the three <a href="http://en.cppreference.com/w/cpp/language/value_category#Primary_categories">primary value categories</a>.</p>
+                </section>
+
+                <section>
+                    <h2>Primary value categories</h2>
+					<p>There are three of them in C++11:
+					<ul>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#lvalue">lvalue</a> (<em>left value</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue_.28until_C.2B.2B11.29prvalue_.28since_C.2B.2B11.29">prvalue</a> (<em>pure rvalue</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#xvalue">xvalue</a> (<em>expiring value</em>)</li>
+					</ul>
+					</p>
+                </section>
+
+                <section>
+                    <h2>Mixed value categories</h2>
+					<p>There are two of them in C++11:
+					<ul>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#glvalue">glvalue</a> (<em>generalized left value</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue">rvalue</a> (<em>right value</em>)</li>
+					</ul>
+					</p>
+                </section>
+                
+                <section>
+                    <h2>Primary and Mixed Value Categories</h2>
+					<p><img src="C++ value categories.png" height="400"/></p>
+                </section>
+				
+                <section>
+                    <h2>Expression properties</h2>
+					<p>The <em>primary value categories</em> correspond to two <em>properties of expressions</em>:
+					<ul>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#Primary_categories">Has identity</a>: it's possible to determine whether the expression refers to the same entity as another expression, such as by comparing addresses of the objects or the functions they identify (obtained directly or indirectly)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#Primary_categories">Can be moved from</a>: move constructor, move assignment operator, or another function overload that implements move semantics can bind to the expression</li>
+					</ul>
+					</p>
+                </section>
+
+                <section>
+                    <h2>Value Categories vs. Expression Properties</h2>
+
+					<table>
+						<thead>
+							<tr>
+								<th>Value Category</th>
+								<th>Identity</th>
+								<th>Movable From</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#lvalue">lvalue</a></td><td>Yes</td><td>&ndash;</td>
+							</tr>
+							<tr>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue_.28until_C.2B.2B11.29prvalue_.28since_C.2B.2B11.29">prvalue</a></td><td>&ndash;</td><td>Yes</td>
+							</tr>
+							<tr>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#xvalue">xvalue</a></td><td>Yes</td><td>Yes</td>
+							</tr>
+							<tr>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#glvalue">glvalue</a></td><td>Yes</td><td>Maybe</td>
+							</tr>
+							<tr>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue">rvalue</a></td><td>Maybe</td><td>Yes</td>
+							</tr>
+						</tbody>
+					</table>
+                </section>
+
+                <section>
+                    <h2>Rvalue Examples</h2>
+<pre><code class="lang-cpp">int i;
+
+// Literal (prvalue)
+42;
+
+// Temporary (prvalue)
+int();
+i++;
+
+// Lambda expression (prvalue)
+[](int x){ return x * x; };
+
+// Standard library move function (xvalue)
+std::move(i);
+
+// Equivalent to the above (xvalue)
+static_cast&lt;int&&&gt;(i);
+</code></pre>
+                </section>
+
+                <section>
+                    <h2>Game Over</h2>
+                </section>
+            </div>
+        </div>
+        
+        <script src="lib/js/head.min.js"></script>
+        <script src="js/reveal.js"></script>
+        <script>
+            Reveal.initialize({
+                // Display a presentation progress bar
+                progress: true,
+
+                // Display the page number of the current slide
+                slideNumber: false,
+
+                // Push each slide change to the browser history
+                history: false,
+
+                // Enable keyboard shortcuts for navigation
+                keyboard: true,
+
+                // Enable the slide overview mode
+                overview: true,
+
+                // Vertical centering of slides
+                center: true,
+
+                // Enables touch navigation on devices with touch input
+                touch: true,
+
+                // Transition style
+                transition: 'convex', // none/fade/slide/convex/concave/zoom
+
+                dependencies: [
+                    // Syntax highlight for <code> elements
+                    { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+                ]
+            });
+        </script>
+    </body>
+</html>
