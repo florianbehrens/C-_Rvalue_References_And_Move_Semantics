@@ -17,12 +17,12 @@
             <div class="slides">
                 <section>
                     <h1>C++ Rvalue References and Move Semantics</h1>
-                    <p><small>Florian Behrens, 31.03.2016</small><p>
+                    <p><small>Florian Behrens, 03/2016<br>(updated 09/2020)</small><p>
                 </section>
 				
                 <section>
                     <h2>Once upon a time...</h2>
-                    <p>In C++03 and before, temporaries (aka "rvalues", as they often lie on the right side of an assignment) were intended to never be modifiable and were considered to be indistinguishable from <code>const T&amp;</code> types.</p>
+                    <p>In C++03 and before, temporaries (aka "Rvalues", as they often lie on the right side of an assignment) were intended to never be modifiable and were considered to be indistinguishable from <code>const T&amp;</code> types.</p>
 <pre><code class="lang-cpp">void foo() {
     std::string s;
     s = std::string("Hello world!");
@@ -39,19 +39,17 @@
                 <section>
                     <h2>Ok, it might be objected that there is <a href="https://en.wikipedia.org/wiki/Return_value_optimization">Return Value Optimization</a></h2>
                     <p>But what if:</p>
-<pre><code class="lang-cpp">std::vector&lt;int&gt; make_vector(bool big) {
-    std::vector&lt;int&gt; small_vec;
-    std::vector&lt;int&gt; big_vec(1000000);
-    
-    if (big)
-        return big_vec;
-    
-    return small_vec;
+                       
+<pre><code class="lang-cpp">std::string F(bool cond = false) {
+    std::string first("first");
+    std::string second("second");
+    return cond ? first : second;
 }</code></pre>                       
+                    <small>Also known as <a href="https://en.cppreference.com/w/cpp/language/copy_elision">copy elision</a>.</small>
                 </section>
 
                 <section>
-                    <h2>Likewise, what if you wanted to store a <a href="http://www.boost.org/doc/libs/1_60_0/libs/core/doc/html/core/noncopyable.html">non-copyable</a> resource in a container?</h2>
+                    <h2>Likewise, what if you wanted to store a <a href="http://www.boost.org/doc/libs/1_60_0/libs/core/doc/html/core/noncopyable.html">non-copyable</a> resource in a vector?</h2>
 <pre><code class="lang-cpp">struct file : boost::noncopyable {
     file(std::string name) {
         fd_ = fopen(name.c_str(), "r");
@@ -82,15 +80,16 @@ lhs = std::move(rhs);
                 </section>
 
                 <section>
-                    <h2>How to define move operators?</h2>
+                    <h2>How to make a class movable?</h2>
+                    <p>Define move operators:</p>
 <pre><code class="lang-cpp">struct foo {
     ...
     
     // Copy constructor
-    foo(const foo& obj);
+    foo(const foo& rhs);
     
     // Move constructor
-    foo(foo&& obj);
+    foo(foo&& rhs);
     
     // Assignment operator
     foo& operator=(const foo& rhs);
@@ -125,13 +124,20 @@ lhs = std::move(rhs);
                 </section>
 
                 <section>
-                    <h2>What the heck is this fancy <code>T&&</code>?</h2>
-					<p class="fragment">An <a href="en.cppreference.com/w/cpp/language/reference">rvalue reference</a>!</p>
+                    <h2>What the heck is this fancy <code>foo&&</code>?</h2>
+                    <p class="fragment">An <a href="https://en.cppreference.com/w/cpp/language/reference">Rvalue reference</a>!</p>
+                    <!--<p class="fragment">Always?</p>
+                    <p class="fragment">Well, no, it's complicated...</p>-->
                 </section>
 
                 <section>
-                    <h2>What the heck is an <a href="en.cppreference.com/w/cpp/language/reference">rvalue reference</a>?</h2>
-					<p class="fragment">Well, let's recall some basic C++ language properties...</p>
+                    <h2>What the heck is an <a href="https://en.cppreference.com/w/cpp/language/reference">Rvalue reference</a>?</h2>
+                    <p class="fragment">Rvalue references are references that bind only to expressions with an value category Rvalue.</p>
+				</section>
+					
+                <section>
+                    <h2>What the heck is a value category?</h2>
+                    <p class="fragment">Well, let's recall some basic C++ language properties...</p>
 				</section>
 					
                 <section>
@@ -144,19 +150,20 @@ lhs = std::move(rhs);
                     <h2>Primary value categories</h2>
 					<p>There are three of them in C++11:
 					<ul>
-						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#lvalue">lvalue</a> (<em>left value</em>)</li>
-						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue_.28until_C.2B.2B11.29prvalue_.28since_C.2B.2B11.29">prvalue</a> (<em>pure rvalue</em>)</li>
-						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#xvalue">xvalue</a> (<em>expiring value</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#lvalue">Lvalue</a> (<em>left value</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue_.28until_C.2B.2B11.29prvalue_.28since_C.2B.2B11.29">PRvalue</a> (<em>pure Rvalue</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#xvalue">Xvalue</a> (<em>expiring value</em>)</li>
 					</ul>
 					</p>
                 </section>
 
                 <section>
                     <h2>Mixed value categories</h2>
-					<p>There are two of them in C++11:
+					<h3>(Or value category groups)</h3>
+                    <p>There are two of them in C++11:
 					<ul>
-						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#glvalue">glvalue</a> (<em>generalized left value</em>)</li>
-						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue">rvalue</a> (<em>right value</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#glvalue">GLvalue</a> (<em>generalized left value</em>)</li>
+						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue">Rvalue</a> (<em>right value</em>)</li>
 					</ul>
 					</p>
                 </section>
@@ -168,12 +175,29 @@ lhs = std::move(rhs);
 				
                 <section>
                     <h2>Expression properties</h2>
-					<p>The <em>primary value categories</em> correspond to two <em>properties of expressions</em>:
-					<ul>
-						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#Primary_categories">Has identity</a>: it's possible to determine whether the expression refers to the same entity as another expression, such as by comparing addresses of the objects or the functions they identify (obtained directly or indirectly)</li>
-						<li class="fragment"><a href="http://en.cppreference.com/w/cpp/language/value_category#Primary_categories">Can be moved from</a>: move constructor, move assignment operator, or another function overload that implements move semantics can bind to the expression</li>
-					</ul>
-					</p>
+					<p>The <em>mixed value categories</em> correspond to two <em>properties of expressions</em>:
+
+					<table>
+						<thead>
+							<tr>
+								<th></th>
+								<th>Property</th>
+								<th>Description</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+                                <td><a href="http://en.cppreference.com/w/cpp/language/value_category#glvalue">GLvalue</a></td>
+                                <td><a href="http://en.cppreference.com/w/cpp/language/value_category#Primary_categories">Has identity</a></td>
+                                <td><small>It's possible to determine whether the expression refers to the same entity as another expression, such as by comparing addresses of the objects or the functions they identify (obtained directly or indirectly).</small></td>
+							</tr>
+							<tr>
+                                <td><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue">Rvalue</a></td>
+                                <td><a href="http://en.cppreference.com/w/cpp/language/value_category#Primary_categories">Can be moved from</a></td>
+                                <td><small>Move constructor, assignment operator, or another function overload that implements move semantics can bind to the expression.</small></td>
+							</tr>
+						</tbody>
+					</table>
                 </section>
 
                 <section>
@@ -189,19 +213,13 @@ lhs = std::move(rhs);
 						</thead>
 						<tbody>
 							<tr>
-								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#lvalue">lvalue</a></td><td>Yes</td><td>&ndash;</td>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#lvalue">Lvalue</a></td><td>Yes</td><td>&ndash;</td>
 							</tr>
 							<tr>
-								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue_.28until_C.2B.2B11.29prvalue_.28since_C.2B.2B11.29">prvalue</a></td><td>&ndash;</td><td>Yes</td>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue_.28until_C.2B.2B11.29prvalue_.28since_C.2B.2B11.29">PRvalue</a></td><td>&ndash;</td><td>Yes</td>
 							</tr>
 							<tr>
-								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#xvalue">xvalue</a></td><td>Yes</td><td>Yes</td>
-							</tr>
-							<tr>
-								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#glvalue">glvalue</a></td><td>Yes</td><td>Maybe</td>
-							</tr>
-							<tr>
-								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#rvalue">rvalue</a></td><td>Maybe</td><td>Yes</td>
+								<td><a href="http://en.cppreference.com/w/cpp/language/value_category#xvalue">Xvalue</a></td><td>Yes</td><td>Yes</td>
 							</tr>
 						</tbody>
 					</table>
@@ -209,24 +227,111 @@ lhs = std::move(rhs);
 
                 <section>
                     <h2>Rvalue Examples</h2>
-<pre><code class="lang-cpp">int i;
+                    <small>
+                        <table>
+                            <tr>
+                                <td><code class="fragment lang-cpp">int expr = 42;</code></td>
+                                <td><code class="fragment lang-cpp">// Lvalue</code></td>
+                            </tr>
+                            <tr>
+                                <td><code class="fragment lang-cpp">int&& expr = 42;</code></td>
+                                <td><code class="fragment lang-cpp">// Lvalue of type is Rvalue reference</code></td>
+                            </tr>
+                            <tr>
+                                <td><code class="fragment lang-cpp">42;</code></td>
+                                <td><code class="fragment lang-cpp">// literal is PRvalue</code></td>
+                            </tr>
+                            <tr>
+                                <td><code class="fragment lang-cpp">int(42); i++;</code></td>
+                                <td><code class="fragment lang-cpp">// temporaries are PRvalues</code></td>
+                            </tr>
+                            <tr>
+                                <td><code class="fragment lang-cpp">[]{};</code></td>
+                                <td><code class="fragment lang-cpp">// lambda expression is PRvalue</code></td>
+                            </tr>
+                            <tr>
+                                <td><code class="fragment lang-cpp">std::move(i);</code></td>
+                                <td><code class="fragment lang-cpp">// standard library move function creates Xvalue</code></td>
+                            </tr>
+                            <tr>
+                                <td><code class="fragment lang-cpp">static_cast&lt;int&&&gt;(i);</code></td>
+                                <td><code class="fragment lang-cpp">// the same as above</code></td>
+                            </tr>
+                        </table>
+                    </small>
+                </section>
 
-// Literal (prvalue)
-42;
+                <section>
+                    <h2>Universal or forwarding reference (1)</h2>
+                    <p>Does this compile?</p>
+                    <pre><code class="lang-cpp">void foo(int&&);
 
-// Temporary (prvalue)
-int();
-i++;
+int i = 42;
+foo(i);
+                    </code></pre>
+                    <p class="fragment">No, because <code>i</code> is an Lvalue and does not bind to an Rvalue reference!</p>
+                </section>
 
-// Lambda expression (prvalue)
-[](int x){ return x * x; };
+                <section>
+                    <h2>Universal or forwarding reference (2)</h2>
+                    <p>Ok, does that compile?</p>
+                    <pre><code class="lang-cpp">template&lt;typename T>
+void foo(T&& arg);
 
-// Standard library move function (xvalue)
-std::move(i);
+int i = 42;
+foo(i);
+                    </code></pre>
+                    <p class="fragment">Yes. But why? And of what value category is <code>arg</code>?</p>
+                </section>
 
-// Equivalent to the above (xvalue)
-static_cast&lt;int&&&gt;(i);
-</code></pre>
+                <section>
+                    <h2>Universal or forwarding reference (3)</h2>
+                    <p>And this?</p>
+                    <pre><code class="lang-cpp">int i = 42;
+auto&& i2 = i;
+                    </code></pre>
+                    <p class="fragment">Yes. And of what value category is <code>i2</code>?</p>
+                </section>
+
+                <section>
+                    <h2>Universal or forwarding reference (4)</h2>
+                    <p>Universal references can bind to Lvalues <em>and</em> Rvalues!</p>
+                    <pre><code class="lang-cpp">template&lt;typename T&gt;
+void foo(T&& arg);
+
+int i = 42;
+int&& ri = 43;
+
+f(i);   // Lvalue argument, arg is int& (Lvalue)
+
+f(ri);  // Rvalue argument, arg is int&& (Rvalue)</code></pre>
+                </section>
+
+                <section>
+                    <h2>Universal or forwarding reference (5)</h2>
+                    <p>Universal references can live in the wild only in:</p>
+                    <ul>
+                        <li>function templates with <code>T&&</code> function argument</li>
+                        <li><code>auto&&</code> variable declarations</li>
+                        <li>in generic lambdas with <code>auto&&</code> arguments.</li>
+                    </ul>
+                    <p>
+                        <small>Everywhere where type deduction is involved.</small>
+                    </p>                    
+                </section>
+
+                <section>
+                    <h2>C++17</h2>
+                    <p>
+                        Copy elision is mandatory in some situations,
+                        and that required separation of PRvalue expressions from the
+                        temporary objects initialized by them
+                        (<a href="https://en.cppreference.com/w/cpp/language/implicit_conversion#Temporary_materialization">temporary materialization</a>).
+                    </p>
+                    <p>
+                        Note that, in contrast with the C++11 scheme,
+                        PRvalues are no longer moved from.
+                    </p>
                 </section>
 
                 <section>
